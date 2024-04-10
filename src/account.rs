@@ -15,7 +15,7 @@ pub(crate) fn signup(password: &String) -> anyhow::Result<()> {
 
     let path = std::path::Path::new("config.pass");
     if path.exists() {
-        return Err(anyhow!("You already have an account (changing master password is not supported yet)!"));
+        return Err(anyhow!("You already have an account!"));
     }
 
     // Data to check if password is correct in the future
