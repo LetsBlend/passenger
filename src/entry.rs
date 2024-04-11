@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use std::env;
 use std::fs::{File, remove_file};
 use std::io::{Read, Write};
 use std::num::NonZeroU32;
+use std::path::PathBuf;
 use aes_gcm::{AeadCore, Aes256Gcm, AesGcm, Key, KeyInit};
 use aes_gcm::aead::{Aead, OsRng};
 use aes_gcm::aead::consts::U12;
@@ -62,26 +64,33 @@ pub(crate) fn add_entry(password: &String, mut name: String) -> Result<()> {
         return Err(anyhow!("Invalid input!"));
     }
 
-    let mut file = File::create(&entry.name)?;
+    if let Ok(mut path) = env::var("APPDATA").map(PathBuf::from) {
+        path.push("passenger");
+        path.push(entry.name);
+        let mut file = File::create(&path)?;
 
-    let mut config_file = File::open("config.pass")?;
-    let mut from_file = Vec::new();
+        path.pop();
+        path.push("config.pass");
+        let mut config_file = File::open(&path)?;
+        let mut from_file = Vec::new();
 
-    config_file.read_to_end(&mut from_file)?;
-    let salt = &from_file[12..24];
-    let mut key_rand = from_file[24..56].to_vec();
+        config_file.read_to_end(&mut from_file)?;
+        let salt = &from_file[12..24];
+        let mut key_rand = from_file[24..56].to_vec();
 
-    ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
+        ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
 
-    let key = Key::<Aes256Gcm>::from_slice(&key_rand);
-    let cipher = Aes256Gcm::new(&key);
+        let key = Key::<Aes256Gcm>::from_slice(&key_rand);
+        let cipher = Aes256Gcm::new(&key);
 
-    let mut data = String::new();
-    data.push_str(&entry.username);
-    data.push_str(&entry.email);
-    data.push_str(&entry.password);
-    encrypt(&cipher, &data, &mut file)?;
-    file.flush()?;
+        let mut data = String::new();
+        data.push_str(&entry.username);
+        data.push_str(&entry.email);
+        data.push_str(&entry.password);
+        encrypt(&cipher, &data, &mut file)?;
+        file.flush()?;
+    }
+
     Ok(())
 }
 
@@ -89,9 +98,13 @@ pub(crate) fn remove_entry(mut name: String) -> Result<()> {
     if name.is_empty() {
         return Err(anyhow!("Invalid input!"));
     }
-
     name.push_str(".pass");
-    remove_file(&name)?;
+
+    if let Ok(mut path) = env::var("APPDATA").map(PathBuf::from) {
+        path.push("passenger");
+        path.push(name);
+        remove_file(path)?;
+    }
     Ok(())
 }
 
@@ -117,38 +130,45 @@ pub(crate) fn get_entry(password: &String, mut name: String) -> Result<()> {
     let mut entry = Entry::new();
     entry.name = name;
 
-    let mut file = File::open("config.pass")?;
-    let mut from_file = Vec::new();
+    if let Ok(mut path) = env::var("APPDATA").map(PathBuf::from) {
+        path.push("passenger");
+        path.push("config.pass");
 
-    file.read_to_end(&mut from_file)?;
-    let salt = &from_file[12..24];
-    let mut key_rand = from_file[24..56].to_vec();
+        let mut file = File::open(&path)?;
+        let mut from_file = Vec::new();
 
-    ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
-    let key = Key::<Aes256Gcm>::from_slice(&key_rand);
-    let cipher = Aes256Gcm::new(&key);
+        file.read_to_end(&mut from_file)?;
+        let salt = &from_file[12..24];
+        let mut key_rand = from_file[24..56].to_vec();
 
-    let mut file = File::open(&entry.name)?;
+        ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
+        let key = Key::<Aes256Gcm>::from_slice(&key_rand);
+        let cipher = Aes256Gcm::new(&key);
 
-    let mut data = Vec::new();
-    file.read_to_end(&mut data)?;
+        path.pop();
+        path.push(entry.name);
+        let mut file = File::open(&path)?;
 
-    let mut data_str = String::new();
-    decrypt(&cipher, &data, &mut data_str)?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
 
-    print!("    username: ");
-    let map = HashMap::from([(0, "    username: "), (1, "    email: "), (2, "    password: ")]);
-    let mut index = 0;
-    for element in data_str.chars() {
-        if element == '\n' {
-            index += 1;
-            println!();
-            if index < 3 {
-                print!("{}", map[&{index}]);
-            }
-            continue;
-        };
-        print!("{element}");
+        let mut data_str = String::new();
+        decrypt(&cipher, &data, &mut data_str)?;
+
+        print!("    username: ");
+        let map = HashMap::from([(0, "    username: "), (1, "    email: "), (2, "    password: ")]);
+        let mut index = 0;
+        for element in data_str.chars() {
+            if element == '\n' {
+                index += 1;
+                println!();
+                if index < 3 {
+                    print!("{}", map[&{ index }]);
+                }
+                continue;
+            };
+            print!("{element}");
+        }
     }
     Ok(())
 }

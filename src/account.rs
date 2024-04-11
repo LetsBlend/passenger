@@ -1,10 +1,11 @@
+use std::env;
 use std::ffi::OsStr;
 use std::fs::{File};
 use std::io::{Read, Write};
 use aes_gcm::{AeadCore, Aes256Gcm, Key, KeyInit};
 use rand::random;
 use std::num::NonZeroU32;
-use std::path::PathBuf;
+use std::path::{PathBuf};
 use aes_gcm::aead::{Aead, OsRng};
 use anyhow::{anyhow};
 
@@ -42,9 +43,15 @@ pub(crate) fn signup(password: &String) -> anyhow::Result<()> {
             data_to_write.extend_from_slice(key_rand.as_ref());
             data_to_write.extend_from_slice(cipher_text.as_ref());
 
-            let mut file =  File::create("config.pass")?;
-            file.write_all(&data_to_write)?;
-            file.flush()?;
+            if let Ok(mut path) = env::var("APPDATA").map(PathBuf::from) {
+                path.push("passenger");
+                std::fs::create_dir_all(&path)?;
+                path.push("config.pass");
+
+                let mut file =  File::create(path)?;
+                file.write_all(&data_to_write)?;
+                file.flush()?;
+            }
         }
         Err(_) => return Err(anyhow!("Invalid data!"))
     }
@@ -53,30 +60,38 @@ pub(crate) fn signup(password: &String) -> anyhow::Result<()> {
 }
 
 pub(crate) fn login(password: &String) -> anyhow::Result<()> {
-    // Read
-    let mut file = File::open("config.pass")?;
-    let mut from_file = Vec::new();
+    if let Ok(mut path) = env::var("APPDATA").map(PathBuf::from) {
+        path.push("passenger");
+        path.push("config.pass");
 
-    file.read_to_end(&mut from_file)?;
-    let nonce= &from_file[0..12];
-    let nonce = aes_gcm::Nonce::from_slice(&nonce);
-    let salt = &from_file[12..24];
-    let mut key_rand = from_file[24..56].to_vec();
-    let cipher_text: Vec<u8> = from_file[56..].to_vec();
+        // Read
+        let mut file =  File::open(path)?;
+        let mut from_file = Vec::new();
 
-    ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
-    let key = Key::<Aes256Gcm>::from_slice(&key_rand);
-    let cipher = Aes256Gcm::new(&key);
+        file.read_to_end(&mut from_file)?;
+        let nonce= &from_file[0..12];
+        let nonce = aes_gcm::Nonce::from_slice(&nonce);
+        let salt = &from_file[12..24];
+        let mut key_rand = from_file[24..56].to_vec();
+        let cipher_text: Vec<u8> = from_file[56..].to_vec();
 
-    if let Ok(_) = cipher.decrypt(&nonce, cipher_text.as_ref()){
-        return Ok(())
+        ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
+        let key = Key::<Aes256Gcm>::from_slice(&key_rand);
+        let cipher = Aes256Gcm::new(&key);
+
+        if let Ok(_) = cipher.decrypt(&nonce, cipher_text.as_ref()){
+            return Ok(())
+        }
     }
 
     Err(anyhow!("Invalid password!"))
 }
 
 fn get_passenger_files() -> impl Iterator<Item = PathBuf> {
-    std::fs::read_dir("./").unwrap().filter_map(|result| result.ok()).map(|dir| dir.path()).filter_map(|path| {
+    let mut path = env::var("APPDATA").map(PathBuf::from).unwrap_or(PathBuf::from("ERROR"));
+    path.push("passenger");
+
+    std::fs::read_dir(path).unwrap().filter_map(|result| result.ok()).map(|dir| dir.path()).filter_map(|path| {
         if path.extension().map_or(false, |ext| ext == "pass") {
             Some(path)
         } else {
@@ -86,43 +101,46 @@ fn get_passenger_files() -> impl Iterator<Item = PathBuf> {
 }
 
 fn decrypt(password: &String) -> anyhow::Result<Vec<String>> {
-
-    let mut file = File::open("config.pass")?;
-    let mut from_file = Vec::new();
-
-    file.read_to_end(&mut from_file)?;
-    let salt = &from_file[12..24];
-    let mut key_rand = from_file[24..56].to_vec();
-
-    ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
-    let key = Key::<Aes256Gcm>::from_slice(&key_rand);
-    let cipher = Aes256Gcm::new(&key);
-
     let mut out = Vec::new();
 
-    let entries = get_passenger_files();
-
-    for entry in entries {
-        let mut cipher_text_start = 12;
-        let path = entry.as_path();
-        if let Some(name) = path.file_name() {
-            if name == OsStr::new("config.pass") {
-                cipher_text_start = 56;
-            }
-        }
-
+    if let Ok(mut path) = env::var("APPDATA").map(PathBuf::from) {
+        path.push("passenger");
+        path.push("config.pass");
         let mut file = File::open(path)?;
+        let mut from_file = Vec::new();
 
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
+        file.read_to_end(&mut from_file)?;
+        let salt = &from_file[12..24];
+        let mut key_rand = from_file[24..56].to_vec();
 
-        let nonce = &data[0..12];
-        let nonce = aes_gcm::Nonce::from_slice(&nonce);
-        let cipher_text = data[cipher_text_start..].to_vec();
+        ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, NonZeroU32::new(100_000).unwrap(), salt.as_ref(), password.as_bytes(), &mut key_rand);
+        let key = Key::<Aes256Gcm>::from_slice(&key_rand);
+        let cipher = Aes256Gcm::new(&key);
 
-        match cipher.decrypt(&nonce, cipher_text.as_ref()){
-            Ok(plain_text) => { out.push(String::from_utf8(plain_text).unwrap().to_string()); }
-            Err(err) => { return Err(anyhow!("Failed to decrypt: {}", err)); }
+        let entries = get_passenger_files();
+
+        for entry in entries {
+            let mut cipher_text_start = 12;
+            let path = entry.as_path();
+            if let Some(name) = path.file_name() {
+                if name == OsStr::new("config.pass") {
+                    cipher_text_start = 56;
+                }
+            }
+
+            let mut file = File::open(path)?;
+
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)?;
+
+            let nonce = &data[0..12];
+            let nonce = aes_gcm::Nonce::from_slice(&nonce);
+            let cipher_text = data[cipher_text_start..].to_vec();
+
+            match cipher.decrypt(&nonce, cipher_text.as_ref()){
+                Ok(plain_text) => { out.push(String::from_utf8(plain_text).unwrap().to_string()); }
+                Err(err) => { return Err(anyhow!("Failed to decrypt: {}", err)); }
+            }
         }
     }
 
