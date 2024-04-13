@@ -14,11 +14,6 @@ pub(crate) fn signup(password: &String) -> anyhow::Result<()> {
         return Err(anyhow!("Invalid input!"));
     }
 
-    let path = std::path::Path::new("config.pass");
-    if path.exists() {
-        return Err(anyhow!("You already have an account!"));
-    }
-
     // Data to check if password is correct in the future
     let text = String::from("ksadj/f023j4k-.asd#+21rfrawsf$j23*234ds#fs%dklvyl{k2)13++#123-2DS7dfgafdsg,s.sa2312f45d\"g65fga4!32?43rth+0#54d6%45a3mwa");
 

@@ -1,6 +1,8 @@
 mod entry;
 mod account;
 
+use std::env;
+use std::path::PathBuf;
 use anyhow::{Result, anyhow};
 
 
@@ -51,6 +53,14 @@ fn main() {
 
         match command_keyword {
             "signup" | "s" => {
+                let mut path = env::var("APPDATA").map(PathBuf::from).unwrap_or(PathBuf::from("ERROR"));
+                path.push("passenger");
+                path.push("config.pass");
+                if path.exists() {
+                    println!("You already have an account!");
+                    continue;
+                }
+
                 println!("Please type in your password (it is recommended to use a secure password)!");
                 println!("IF YOU FORGET YOUR PASSWORD YOU WILL PERMANENTLY BE UNABLE TO OBTAIN ALL SAVED PASSWORDS!!!");
                 password = read_password().unwrap_or(String::new());
