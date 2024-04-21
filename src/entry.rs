@@ -115,7 +115,7 @@ fn decrypt(cipher: &AesGcm<Aes256, U12>, encrypted_text: &Vec<u8>, out: &mut Str
 
     match cipher.decrypt(&nonce, cipher_text.as_ref()){
         Ok(plain_text) => { *out = String::from_utf8(plain_text).unwrap().to_string(); }
-        Err(err) => {println!("Failed to decrypt: {}", err)}
+        Err(err) => {eprintln!("Failed to decrypt: {}", err)}
     }
 
     Ok(())

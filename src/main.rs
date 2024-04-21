@@ -43,7 +43,7 @@ fn main() {
         match std::io::stdin().read_line(&mut command) {
             Ok(_) => {}
             Err(_) => {
-                println!("[ERROR]: Failed to read command please try again: ");
+                eprintln!("[ERROR]: Failed to read command please try again: ");
                 continue;
             }
         }
@@ -66,7 +66,7 @@ fn main() {
                 password = read_password().unwrap_or(String::new());
 
                 if let Err(result) = account::signup(&password) {
-                    println!("Failed to signup: {:?}", result);
+                    eprintln!("Failed to signup: {:?}", result);
                 } else {
                     println!("Successfully signed up!");
                     logged_in = true;
@@ -77,7 +77,7 @@ fn main() {
                 password = read_password().unwrap_or(String::new());
 
                 if let Err(result) = account::login(&password) {
-                    println!("Failed to login: {:?}", result);
+                    eprintln!("Failed to login: {:?}", result);
                 } else {
                     println!("Successfully logged in!");
                     logged_in = true;
@@ -89,7 +89,7 @@ fn main() {
                 let new_password = read_password().unwrap_or(String::new());
 
                 if let Err(result) = account::change(&password, &new_password) {
-                    println!("Failed to change password: {:?}", result)
+                    eprintln!("Failed to change password: {:?}", result)
                 } else {
                     password = new_password;
                     println!("Successfully changed password!");
@@ -98,7 +98,7 @@ fn main() {
             "add" | "a" => {
                 if !logged_in { println!("You haven't logged in or signed up yet!"); continue; }
                 if let Err(result) = entry::add_entry(&password, data) {
-                    println!("Adding entry failed: {:?}", result)
+                    eprintln!("Adding entry failed: {:?}", result)
                 } else {
                     println!("Successfully added entry!");
                 }
@@ -106,7 +106,7 @@ fn main() {
             "remove" | "r" => {
                 if !logged_in { println!("You haven't logged in or signed up yet!"); continue; }
                 if let Err(result) = entry::remove_entry(data) {
-                    println!("Removing entry failed: {:?}", result)
+                    eprintln!("Removing entry failed: {:?}", result)
                 } else {
                     println!("Successfully removed entry!");
                 }
@@ -114,7 +114,7 @@ fn main() {
             "get" | "g" => {
                 if !logged_in { println!("You haven't logged in or signed up yet!"); continue; }
                 if let Err(result) = entry::get_entry(&password, data) {
-                    println!("{:?}", result)
+                    eprintln!("{:?}", result)
                 }
             }
             "quit" | "q" => {
@@ -132,7 +132,7 @@ fn main() {
 
             }
             _ => {
-                println!("[ERROR]: Command: \"{}\" does not exist or was incorrectly used!", command_keyword.trim());
+                eprintln!("[ERROR]: Command: \"{}\" does not exist or was incorrectly used!", command_keyword.trim());
             }
         }
     }
